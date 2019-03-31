@@ -1,0 +1,56 @@
+grammar dk.sdu.mmmi.mdsd.MathAssignmentLanguage with org.eclipse.xtext.common.Terminals
+
+generate mathAssignmentLanguage "http://www.sdu.dk/mmmi/mdsd/MathAssignmentLanguage"
+
+Root:
+	elements+=Element*
+;
+
+Element:
+	Expression | EvaluateExpression
+;
+
+EvaluateExpression:
+	'result' 'is' expression=Expression
+;
+
+Expression:
+	AdditionOrSubtraction
+;
+
+AdditionOrSubtraction returns Expression:
+	MultiplicationOrDivision (
+		({Addition.left=current} '+' | {Subtraction.left=current} '-' ) 
+		right=MultiplicationOrDivision)*
+;
+
+MultiplicationOrDivision returns Expression:
+	Primary (
+		({Multiplication.left=current} '*' | {Division.left=current} '/' ) 
+		right=Primary)*
+;
+
+Primary returns Expression:
+	Literal | VariableDeclaration | VariableReference | Parenthesis
+;
+
+Literal:
+	value=INT
+;
+
+VariableDeclaration:
+	'let' name=ID '=' expression=Expression
+	(in=In)? 'end'
+;
+
+In:
+	'in' expression=Expression
+;
+
+VariableReference:
+	variable=[VariableDeclaration]
+;
+
+Parenthesis returns Expression:
+	'(' Expression ')'
+;
