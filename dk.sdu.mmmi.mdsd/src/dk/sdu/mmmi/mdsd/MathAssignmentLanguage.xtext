@@ -7,11 +7,19 @@ Root:
 ;
 
 Element:
-	Expression | EvaluateExpression
+	EvaluateExpression | ExternalDeclaration
 ;
 
 EvaluateExpression:
 	'result' label=STRING 'is' expression=Expression
+;
+
+ExternalDeclaration:
+	'external' name=ID '(' parameters+=Parameter (',' parameters+=Parameter)* ')'
+;
+
+Parameter:
+	type=ID name=ID
 ;
 
 Expression:
@@ -31,7 +39,7 @@ MultiplicationOrDivision returns Expression:
 ;
 
 Primary returns Expression:
-	Literal | VariableDeclaration | VariableReference | Parenthesis
+	Literal | VariableDeclaration | VariableReference | ExternalReference | Parenthesis
 ;
 
 Literal:
@@ -49,6 +57,10 @@ In:
 
 VariableReference:
 	variable=[VariableDeclaration]
+;
+
+ExternalReference:
+	external=[ExternalDeclaration] '(' arguments+=Expression (',' arguments+=Expression)* ')'
 ;
 
 Parenthesis returns Expression:

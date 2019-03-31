@@ -3,6 +3,9 @@
  */
 package dk.sdu.mmmi.mdsd.validation
 
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
+import org.eclipse.xtext.validation.Check
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.MathAssignmentLanguagePackage
 
 /**
  * This class contains custom validation rules. 
@@ -11,15 +14,20 @@ package dk.sdu.mmmi.mdsd.validation
  */
 class MathAssignmentLanguageValidator extends AbstractMathAssignmentLanguageValidator {
 	
-//	public static val INVALID_NAME = 'invalidName'
-//
-//	@Check
-//	def checkGreetingStartsWithCapital(Greeting greeting) {
-//		if (!Character.isUpperCase(greeting.name.charAt(0))) {
-//			warning('Name should start with a capital', 
-//					MathAssignmentLanguagePackage.Literals.GREETING__NAME,
-//					INVALID_NAME)
-//		}
-//	}
+	protected static val ISSUE_CODE_PREFIX = 'dk.sdu.mmmi.mdsd.math_assignment_language.'
+	
+	public static val INVALID_AMOUNT_ARGS = ISSUE_CODE_PREFIX + 'InvalidAmountArgs'
+	
+	@Check
+	def checkExternalReferenceCorrectAmountArgs(ExternalReference ref) {
+		val dec = ref.external
+		val expected = dec.parameters.size
+		val actual = ref.arguments.size
+		if (actual != expected) {
+			error('Invalid number of arguments. Expected ' + expected + ' but received ' + actual, 
+					MathAssignmentLanguagePackage.Literals.EXTERNAL_REFERENCE__EXTERNAL, 
+					INVALID_AMOUNT_ARGS)
+		}
+	}
 	
 }

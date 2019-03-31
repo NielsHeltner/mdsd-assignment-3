@@ -6,9 +6,11 @@ package dk.sdu.mmmi.mdsd.generator
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Addition
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Division
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.EvaluateExpression
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalDeclaration
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.In
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Literal
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Multiplication
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Parameter
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Root
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Subtraction
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.VariableDeclaration
@@ -17,6 +19,7 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
 
 /**
  * Generates code from your model files on save.
@@ -40,17 +43,44 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		val pkg = dir.replaceAll("/", ".").substring(0, dir.length - 1) // convert path to package by converting all '/' to '.', and remove trailing '.'
 		val fileName = GEN_FILE_NAME
 		
-		//fsa.generateFile(dir + fileName + GEN_FILE_EXT, template.generateClass(pkg, fileName))
+		fsa.generateFile(dir + fileName + GEN_FILE_EXT, root.generateClass(pkg, fileName))
 	}
 	
-	def generateClass(EvaluateExpression expression, String pkg, String name)'''
+	def generateClass(Root root, String pkg, String name)'''
 		«generateHeader»
 		package «pkg»;
 		
 		public class «name» {
-			//class impl
+			
+			public static interface Externals {
+				
+				«FOR external : root.elements.filter(ExternalDeclaration)»
+					«external.generateMethodSignature»
+					
+				«ENDFOR»
+			}
+			
+			private Externals externals;
+			
+			public «name»(Externals _externals) {
+				externals = _externals
+			}
+			
+			public void compute() {
+				
+			}
+		
 		}
 	'''
+	
+	def generateMethod(ExternalDeclaration dec)
+		'''public int «dec.generateMethodSignature»'''
+	
+	def generateMethodSignature(ExternalDeclaration dec)
+		'''«dec.name»«dec.parameters.generateParameters»'''
+	
+	def generateParameters(Parameter... params)
+		'''(«FOR param : params SEPARATOR ', '»«param.type» «param.name»«ENDFOR»)'''
 	
 	def generateHeader()'''
 		/**
@@ -61,6 +91,12 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	/**
 	 * Start of recursive multi-dispatch methods for displaying an arithmetic expression's complete syntax tree
 	 */
+	def dispatch CharSequence display(ExternalReference ref)
+		'''«ref.external.name»(«FOR argument : ref.arguments SEPARATOR ', '»«argument.display»«ENDFOR»)'''
+	
+	def dispatch CharSequence display(ExternalDeclaration element)
+		'''External = «element.name»(«FOR parameter : element.parameters SEPARATOR ', '»«parameter.type» «parameter.name»«ENDFOR»)'''
+	
 	def dispatch CharSequence display(EvaluateExpression element)
 		'''Result is = «element.expression.display»'''
 	
