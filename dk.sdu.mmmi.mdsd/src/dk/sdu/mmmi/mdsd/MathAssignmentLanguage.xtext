@@ -11,7 +11,7 @@ Element:
 ;
 
 EvaluateExpression:
-	'result' 'is' expression=Expression
+	'result' label=STRING 'is' expression=Expression
 ;
 
 Expression:
