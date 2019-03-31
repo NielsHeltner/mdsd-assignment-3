@@ -54,16 +54,13 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			
 			public static interface Externals {
 				
-				«FOR external : root.elements.filter(ExternalDeclaration)»
-					«external.generateMethodSignature»
-					
-				«ENDFOR»
+				«root.elements.filter(ExternalDeclaration).generateExternals»
 			}
 			
 			private Externals externals;
 			
 			public «name»(Externals _externals) {
-				externals = _externals
+				externals = _externals;
 			}
 			
 			public void compute() {
@@ -71,6 +68,13 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			}
 		
 		}
+	'''
+	
+	def generateExternals(ExternalDeclaration... externalDecs)'''
+		«FOR external : externalDecs»
+			«external.generateMethod»;
+			
+		«ENDFOR»
 	'''
 	
 	def generateMethod(ExternalDeclaration dec)
@@ -91,12 +95,6 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	/**
 	 * Start of recursive multi-dispatch methods for displaying an arithmetic expression's complete syntax tree
 	 */
-	def dispatch CharSequence display(ExternalReference ref)
-		'''«ref.external.name»(«FOR argument : ref.arguments SEPARATOR ', '»«argument.display»«ENDFOR»)'''
-	
-	def dispatch CharSequence display(ExternalDeclaration element)
-		'''External = «element.name»(«FOR parameter : element.parameters SEPARATOR ', '»«parameter.type» «parameter.name»«ENDFOR»)'''
-	
 	def dispatch CharSequence display(EvaluateExpression element)
 		'''Result is = «element.expression.display»'''
 	
@@ -120,6 +118,12 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	
 	def dispatch CharSequence display(VariableReference reference)
 		'''«reference.variable.expression.display»'''
+	
+	def dispatch CharSequence display(ExternalDeclaration declaration)
+		'''external «declaration.name»(«FOR parameter : declaration.parameters SEPARATOR ', '»«parameter.type» «parameter.name»«ENDFOR»)'''
+	
+	def dispatch CharSequence display(ExternalReference reference)
+		'''«reference.external.name»(«FOR argument : reference.arguments SEPARATOR ', '»«argument.display»«ENDFOR»)'''
 	
 	def dispatch display(Literal expression)
 		'''«expression.value»'''

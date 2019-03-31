@@ -2,7 +2,7 @@ package dk.sdu.mmmi.mdsd.ui.hover
 
 import com.google.inject.Inject
 import dk.sdu.mmmi.mdsd.interpreter.MathAssignmentLanguageInterpreter
-import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Element
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
 import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.util.Diagnostician
 import org.eclipse.xtext.ui.editor.hover.html.DefaultEObjectHoverProvider
@@ -15,7 +15,7 @@ class MathAssignmentLanguageEObjectHoverProvider extends DefaultEObjectHoverProv
 	extension MathAssignmentLanguageInterpreter
 
 	override getHoverInfoAsHtml(EObject object) {
-		if (object.programHasNoErrors && object instanceof Element) {
+		if (object.programHasNoErrors && object instanceof Expression) {
 			return '''
 				<p>
 				result = <b>«object.compute»</b>

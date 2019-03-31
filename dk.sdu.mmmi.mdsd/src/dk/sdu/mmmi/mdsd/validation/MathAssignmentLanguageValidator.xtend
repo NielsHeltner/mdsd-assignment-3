@@ -19,10 +19,10 @@ class MathAssignmentLanguageValidator extends AbstractMathAssignmentLanguageVali
 	public static val INVALID_AMOUNT_ARGS = ISSUE_CODE_PREFIX + 'InvalidAmountArgs'
 	
 	@Check
-	def checkExternalReferenceCorrectAmountArgs(ExternalReference ref) {
-		val dec = ref.external
-		val expected = dec.parameters.size
-		val actual = ref.arguments.size
+	def checkExternalReferenceCorrectAmountArgs(ExternalReference reference) {
+		val declaration = reference.external
+		val expected = declaration.parameters.size
+		val actual = reference.arguments.size
 		if (actual != expected) {
 			error('Invalid number of arguments. Expected ' + expected + ' but received ' + actual, 
 					MathAssignmentLanguagePackage.Literals.EXTERNAL_REFERENCE__EXTERNAL, 
