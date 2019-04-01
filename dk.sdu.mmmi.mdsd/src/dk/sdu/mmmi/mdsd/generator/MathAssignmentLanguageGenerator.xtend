@@ -54,7 +54,10 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			
 			public static interface Externals {
 				
-				«root.elements.filter(ExternalDeclaration).generateExternals»
+				«FOR external : root.elements.filter(ExternalDeclaration)»
+					«external.generateMethod»;
+					
+				«ENDFOR»
 			}
 			
 			private Externals externals;
@@ -64,18 +67,16 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			}
 			
 			public void compute() {
-				
+				«FOR evaluate : root.elements.filter(EvaluateExpression)»
+					«evaluate.generateComputation»
+				«ENDFOR»
 			}
 		
 		}
 	'''
 	
-	def generateExternals(ExternalDeclaration... externalDecs)'''
-		«FOR external : externalDecs»
-			«external.generateMethod»;
-			
-		«ENDFOR»
-	'''
+	def generateComputation(EvaluateExpression evaluate)
+		'''System.out.println(«evaluate.display»);'''
 	
 	def generateMethod(ExternalDeclaration dec)
 		'''public int «dec.generateMethodSignature»'''
@@ -96,7 +97,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * Start of recursive multi-dispatch methods for displaying an arithmetic expression's complete syntax tree
 	 */
 	def dispatch CharSequence display(EvaluateExpression element)
-		'''Result is = «element.expression.display»'''
+		'''"«element.label» " + «element.expression.display»'''
 	
 	def dispatch CharSequence display(Addition expression)
 		'''(«expression.left.display» + «expression.right.display»)'''
@@ -123,7 +124,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		'''external «declaration.name»(«FOR parameter : declaration.parameters SEPARATOR ', '»«parameter.type» «parameter.name»«ENDFOR»)'''
 	
 	def dispatch CharSequence display(ExternalReference reference)
-		'''«reference.external.name»(«FOR argument : reference.arguments SEPARATOR ', '»«argument.display»«ENDFOR»)'''
+		'''externals.«reference.external.name»(«FOR argument : reference.arguments SEPARATOR ', '»«argument.display»«ENDFOR»)'''
 	
 	def dispatch display(Literal expression)
 		'''«expression.value»'''
