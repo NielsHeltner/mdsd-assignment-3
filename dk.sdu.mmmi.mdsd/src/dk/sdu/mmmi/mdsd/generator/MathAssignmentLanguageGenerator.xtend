@@ -152,7 +152,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		'''
 			class «head.generateInnerClassName» {
 				
-				private final int «head.name» = «head.assignment.generateAssignment(head, variableDeclarations.get(variableDeclarations.getIndex(head).key))»;
+				private final int «head.name» = «head.generateAssignment»;
 				
 				public int compute() {
 					return «head.in.generate»;
@@ -171,16 +171,12 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * 		let x = 5 in let x = x end end
 	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
 	 */
-	def generateAssignment(Expression expression, VariableDeclaration head, Iterable<VariableDeclaration> declarations) {
-		//val head = declarations.head
-		println(expression)
-		println('size: ' + expression.getAllContentsOfType(VariableReference).size)
-		println('size: ' + expression.getAllContents(true).size)
+	def generateAssignment(VariableDeclaration head) {
+		val expression = head.assignment
+		val declarations = variableDeclarations.get(variableDeclarations.getIndex(head).key)
 		expression.getAllContentsOfType(VariableReference).filter[variable.name == head.name].forEach[
-			println('yo')
 			val ref = it
-			val target = declarations.findLast[name == ref.variable.name]
-			println('found target? ' + target !== null)
+			val target = declarations.takeWhile[it !== head].findLast[name == ref.variable.name]
 			variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
 		]
 		expression.generate
