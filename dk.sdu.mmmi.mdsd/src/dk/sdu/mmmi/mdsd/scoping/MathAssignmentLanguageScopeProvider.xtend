@@ -32,7 +32,7 @@ class MathAssignmentLanguageScopeProvider extends AbstractMathAssignmentLanguage
 	override getScope(EObject context, EReference reference) {
 		if (reference == epackage.variableReference_Variable) {
 			var localCandidates = context.getAllContainers.filter(VariableDeclaration)
-			if (context.isContainedInFeature(epackage.variableDeclaration_Expression)) {
+			if (context.isContainedInFeature(epackage.variableDeclaration_Assignment)) {
 				localCandidates = localCandidates.drop(1) // if reference is contained in a declaration assignment, drop the declaration itself from the scope (guards against self references)
 			}
 			

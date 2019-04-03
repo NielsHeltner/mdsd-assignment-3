@@ -7,7 +7,7 @@ import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Addition
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Division
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.EvaluateExpression
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalDeclaration
-import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.In
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Literal
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Multiplication
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Parameter
@@ -19,7 +19,15 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
-import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
+import java.util.HashMap
+import java.util.HashSet
+import java.util.ArrayList
+import java.util.concurrent.CopyOnWriteArrayList
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
+import static com.google.common.collect.Lists.newCopyOnWriteArrayList
+import org.eclipse.xtext.EcoreUtil2
+import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
+import java.util.List
 
 /**
  * Generates code from your model files on save.
@@ -32,11 +40,15 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	
 	public static val GEN_DIR = "math/"
 	public static val GEN_FILE_NAME = "MathComputation"
+	
+	//outer list mimics the parallel structure of having multiple EvaluateExpressions
+	//inner list mimics the nested structure of 'let in's
+	val List<List<VariableDeclaration>> variableDeclarations = new CopyOnWriteArrayList()
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
 		val root = resource.allContents.filter(Root).head
 		root.elements.filter(EvaluateExpression).forEach[
-			println(generate)
+			//println(generate)
 		]
 		
 		//root.eAllContents.forEach[println(it)]
@@ -45,7 +57,28 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		val pkg = dir.replaceAll("/", ".").substring(0, dir.length - 1) // convert path to package by converting all '/' to '.', and remove trailing '.'
 		val fileName = GEN_FILE_NAME
 		
+		variableDeclarations.clear
+		// for each EvaluateExpression: create a new collection, store all var declarations in that collection, and add the collection to an outer collection
+		resource.allContents.filter(EvaluateExpression).forEach[
+			variableDeclarations.add(newCopyOnWriteArrayList(
+				getAllContentsOfType(VariableDeclaration)))
+		]
+		
 		fsa.generateFile(dir + fileName + GEN_FILE_EXT, root.generateClass(pkg, fileName))
+	}
+	
+	/**
+	 * Helper method that allows searching for elements that are nested one layer.
+	 */
+	def getIndex(List<List<VariableDeclaration>> container, VariableDeclaration target) {
+		for (i : 0 ..< container.size) {
+			val list = container.get(i)
+			val index = list.indexOf(target)
+			if (index != -1) {
+				return i -> index
+			}
+		}
+		return -1 -> -1
 	}
 	
 	def generateClass(Root root, String pkg, String name)'''
@@ -74,8 +107,44 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 				«ENDFOR»
 			}
 			
+			«FOR declarations : variableDeclarations»
+				«declarations.generateInnerClass»
+			«ENDFOR»
+			
 		}
 	'''
+	
+	def CharSequence generateInnerClass(Iterable<VariableDeclaration> declarations) {
+		val head = declarations.head
+		val tail = declarations.tail
+		val indices = variableDeclarations.getIndex(head)
+		'''
+			class Let«indices.key»_«indices.value» {
+				
+				private final int «head.name» = «head.assignment.generate»; // varRef: if dec.name == ref.var.name -> look in Let map.IndexOf - 1
+				
+				public int compute() {
+					return «head.in.generate»;
+				}
+				
+				«IF !tail.isEmpty»
+					«tail.generateInnerClass»
+				«ENDIF»
+				
+			}
+		'''
+	}
+	/*«FOR innerDeclaration : variableDeclarations.subList(variableDeclarations.indexOf(declaration) + 1, variableDeclarations.indexOf(declaration) + 1)»
+				«innerDeclaration.generateClass»
+			«ENDFOR» */
+	
+	/*def generateInNested(Expression expression) {
+		switch expression {
+			VariableDeclaration: expression.generateClass 
+			VariableReference: 
+			default: expression.generate
+		}
+	}*/
 	
 	def generateMethod(ExternalDeclaration dec)
 		'''public int «dec.generateMethodSignature»'''
@@ -113,20 +182,17 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	def dispatch CharSequence generate(Division expression)
 		'''(«expression.left.generate» / «expression.right.generate»)'''
 	
-	def dispatch CharSequence generate(VariableDeclaration declaration)
-		//'''var «declaration.name» = «declaration.expression.display»«IF declaration.in !== null»«declaration.in.display»«ENDIF»'''
-		'''«IF declaration.in !== null»
-				«declaration.in.generate»«
-			ELSE»
-				«declaration.expression.generate»«
-			ENDIF»'''
+	def dispatch CharSequence generate(VariableDeclaration declaration) {
+		//'''«declaration.in.generate»'''
+		//variableDeclarations.add(declaration)
+		val indices = variableDeclarations.getIndex(declaration)
+		'''new Let«indices.key»_«indices.value»().compute()'''
+	}
 	
-	def dispatch CharSequence generate(In in)
-		//''' in «in.expression.display»'''
-		'''«in.expression.generate»'''
-	
-	def dispatch CharSequence generate(VariableReference reference) // TODO: needs updating
-		'''«reference.variable.expression.generate»'''
+	def dispatch CharSequence generate(VariableReference reference)
+		//'''«reference.variable.assignment.generate»'''
+		//'''new Let«map.indexOf(reference.variable)»().compute()'''
+		'''«reference.variable.name»'''
 	
 	def dispatch CharSequence generate(ExternalReference reference)
 		'''externals.«reference.external.name»(«FOR argument : reference.arguments SEPARATOR ', '»«argument.generate»«ENDFOR»)'''

@@ -47,12 +47,7 @@ Literal:
 ;
 
 VariableDeclaration:
-	'let' name=ID '=' expression=Expression
-	(in=In)? 'end'
-;
-
-In:
-	'in' expression=Expression
+	'let' name=ID '=' assignment=Expression 'in' in=Expression 'end'
 ;
 
 VariableReference:
