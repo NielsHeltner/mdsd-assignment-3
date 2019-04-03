@@ -27,6 +27,8 @@ import org.eclipse.xtext.generator.IGeneratorContext
 
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContainers
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
+import java.util.HashMap
+import java.util.Map
 
 /**
  * Generates code from your model files on save.
@@ -88,7 +90,9 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		else {
 			variableDeclarations.last.add(head)
 		}
-		tail.collectVariableDeclaration(seenContainerSizes)
+		if (!tail.empty) {
+			tail.collectVariableDeclaration(seenContainerSizes)
+		}
 	}
 	
 	/**
@@ -134,8 +138,8 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			
 			«FOR declarations : variableDeclarations»
 				«declarations.generateInnerClass»
+				
 			«ENDFOR»
-			
 		}
 	'''
 	
@@ -148,7 +152,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		'''
 			class «head.generateInnerClassName» {
 				
-				private final int «head.name» = «head.assignment.generateAssignment(declarations)»;
+				private final int «head.name» = «head.assignment.generateAssignment(head, variableDeclarations.get(variableDeclarations.getIndex(head).key))»;
 				
 				public int compute() {
 					return «head.in.generate»;
@@ -156,8 +160,8 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 				
 				«IF !tail.isEmpty»
 					«tail.generateInnerClass»
+					
 				«ENDIF»
-				
 			}
 		'''
 	}
@@ -167,11 +171,16 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * 		let x = 5 in let x = x end end
 	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
 	 */
-	def generateAssignment(Expression expression, Iterable<VariableDeclaration> declarations) {
-		val head = declarations.head
+	def generateAssignment(Expression expression, VariableDeclaration head, Iterable<VariableDeclaration> declarations) {
+		//val head = declarations.head
+		println(expression)
+		println('size: ' + expression.getAllContentsOfType(VariableReference).size)
+		println('size: ' + expression.getAllContents(true).size)
 		expression.getAllContentsOfType(VariableReference).filter[variable.name == head.name].forEach[
+			println('yo')
 			val ref = it
 			val target = declarations.findLast[name == ref.variable.name]
+			println('found target? ' + target !== null)
 			variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
 		]
 		expression.generate
@@ -218,15 +227,10 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	def dispatch CharSequence generate(Division expression)
 		'''(«expression.left.generate» / «expression.right.generate»)'''
 	
-	def dispatch CharSequence generate(VariableDeclaration declaration) {
-		//'''«declaration.in.generate»'''
-		//variableDeclarations.add(declaration)
+	def dispatch CharSequence generate(VariableDeclaration declaration)
 		'''new «declaration.generateInnerClassName»().compute()'''
-	}
 	
 	def dispatch CharSequence generate(VariableReference reference)
-		//'''«reference.variable.assignment.generate»'''
-		//'''new Let«map.indexOf(reference.variable)»().compute()'''
 		'''«reference.variable.name»'''
 	
 	def dispatch CharSequence generate(ExternalReference reference)
