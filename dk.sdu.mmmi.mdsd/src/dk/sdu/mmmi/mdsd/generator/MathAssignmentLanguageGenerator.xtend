@@ -36,9 +36,8 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	public static val GEN_FILE_NAME = "MathComputation"
 	
 	/**
-	 * Data structure the represents the nested structure and scope of 'let in's.
-	 * The outer list mimics the scope of each 'let in' that is not declared inside another,
-	 * and the inner list mimics the nested structure of the outer 'let in'.
+	 * Represents the uppermost node of all variable declarations.
+	 * This node's children are each roots, which each represent the variable declarations in an EvaluateExpression
 	 */
 	var Node<VariableDeclaration> variableTree
 
@@ -56,41 +55,35 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	}
 	
 	/**
-	 * This method acts as a local state for the tail recursive method "collectVariableDeclaration", 
-	 * as it contains the accumulated seenContainerSizes.
+	 * Initializes the collection of variable declarations in an EvaluateExpression.
 	 */
 	def collectVariableDeclarations(EvaluateExpression expression) {
 		val root = new Node<VariableDeclaration>(variableTree)
 		collectVariableDeclaration(expression, root)
-		variableTree.childs.add(root)
+		variableTree.getChildren.add(root)
 	}
 	
 	/**
-	 * Tail recursive method that goes through all VariableDeclarations. If a VariableDeclaration is met 
-	 * with the same layer/depth of nesting as a previous one, a new collection is created (as these should 
-	 * not share scope), and all future VariableDeclarations are added to that list, until another VariableDeclaration 
-	 * is met with the same depth of nesting.
+	 * Recursively goes through all variable declarations in the children of the input object, 
+	 * and collect them according to their nested and parallel structure using a depth-first search.
+	 * The while loop iterates through all variable declarations that are parallel, and for each one
+	 * collect it, and then recursively its children.
+	 *
+	 * What is meant by parallel and nested is that e.g. in the expression:
+	 * 		let x = 1 in let y = 2
+	 * The two variable declarations are not parallel / not at the same layer of nesting, as one
+	 * is nested in the other. While in the expression:
+	 * 		let x = 1 + let y = 2
+	 * They are not nested, but instead parallel.
 	 */
-	def void collectVariableDeclaration(EObject input, Node<VariableDeclaration> node) {
-	    val contents = input.eAllContents//.filter(VariableDeclaration)
-	    while(contents.hasNext) {
-			var element = contents.next
-			if (element instanceof VariableDeclaration) {
-				contents.prune
-				//add to current branch -- nest class
-				val addedNode = node.add(element) //node.childs.last
-				println('input: ' + input)
-			
-				collectVariableDeclaration(element, addedNode) // nesting -> keep adding as childs
-				
-				/*while (contents.hasNext) {
-					println('parallel')
-					val next = contents.next() //previously .get(1) (think that would only support 2 childs)
-					println('next: ' + next)
-					val addedN = node.add(next)
-					//prepare new branch -- new parallel class
-					coll(next as Expression, node) // parallel -> keep adding to current node
-				}*/
+	def private void collectVariableDeclaration(EObject input, Node<VariableDeclaration> node) {
+	    val children = input.eAllContents
+	    while(children.hasNext) {
+			var candidate = children.next
+			if (candidate instanceof VariableDeclaration) {
+				children.prune // removes all elements nested in the last result of ::next (but keeps those parallel)
+				val addedNode = node.add(candidate)
+				collectVariableDeclaration(candidate, addedNode)
 			}
 		}
 	}
@@ -121,7 +114,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 				«ENDFOR»
 			}
 			
-			«FOR declarations : variableTree.childs»
+			«FOR declarations : variableTree.getChildren»
 				«declarations.generateInnerClass»
 			«ENDFOR»
 		}
@@ -152,15 +145,15 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * Iterates through a Node's children and generates nested inner classes for them.
 	 */
 	def generateNestedInnerClass(Node<VariableDeclaration> node)'''
-		«FOR declaration: node.childs»
+		«FOR declaration: node.getChildren»
 			«declaration.generateInnerClass»
 			
 		«ENDFOR»
 	'''
 	
 	/**
-	 * Makes sure that the generated code for an expression of the type:
-	 * 		let x = 5 in let x = x end end
+	 * Ensures that the generated code for an expression of the type:
+	 * 		let x = 5 in let x = x
 	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
 	 */
 	def generateAssignment(VariableDeclaration dec) { // TODO: refactor this method
