@@ -6,7 +6,6 @@ package dk.sdu.mmmi.mdsd.generator
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Addition
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Division
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.EvaluateExpression
-import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalDeclaration
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Literal
@@ -16,19 +15,13 @@ import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Root
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Subtraction
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.VariableDeclaration
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.VariableReference
-import java.util.HashSet
-import java.util.List
-import java.util.Set
-import java.util.concurrent.CopyOnWriteArrayList
+import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
 
-import static extension org.eclipse.xtext.EcoreUtil2.getAllContainers
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
-import java.util.HashMap
-import java.util.Map
 
 /**
  * Generates code from your model files on save.
@@ -43,11 +36,10 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	public static val GEN_FILE_NAME = "MathComputation"
 	
 	/**
-	 * Data structure the represents the nested structure and scope of 'let in's.
-	 * The outer list mimics the scope of each 'let in' that is not declared inside another,
-	 * and the inner list mimics the nested structure of the outer 'let in'.
+	 * Represents the uppermost node of all variable declarations.
+	 * This node's children are each roots, which each represent the variable declarations in an EvaluateExpression
 	 */
-	val List<List<VariableDeclaration>> variableDeclarations = new CopyOnWriteArrayList()
+	var Node<VariableDeclaration> variableTree
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
 		val root = resource.allContents.filter(Root).head
@@ -55,59 +47,45 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		val dir = GEN_DIR
 		val pkg = dir.replaceAll("/", ".").substring(0, dir.length - 1) // convert path to package by converting all '/' to '.', and remove trailing '.'
 		val fileName = GEN_FILE_NAME
-		
-		variableDeclarations.clear
-		variableDeclarations.add(new CopyOnWriteArrayList())
+
+		variableTree = new Node
 		resource.allContents.filter(EvaluateExpression).forEach[collectVariableDeclarations]
 		
 		fsa.generateFile(dir + fileName + GEN_FILE_EXT, root.generateClass(pkg, fileName))
 	}
 	
 	/**
-	 * This method acts as a local state for the tail recursive method "collectVariableDeclaration", 
-	 * as it contains the accumulated seenContainerSizes.
+	 * Initializes the collection of variable declarations in an EvaluateExpression.
 	 */
 	def collectVariableDeclarations(EvaluateExpression expression) {
-		val seenContainerSizes = new HashSet()
-		expression.getAllContentsOfType(VariableDeclaration).collectVariableDeclaration(seenContainerSizes)
+		val root = new Node<VariableDeclaration>(variableTree)
+		collectVariableDeclaration(expression, root)
+		variableTree.getChildren.add(root)
 	}
 	
 	/**
-	 * Tail recursive method that goes through all VariableDeclarations. If a VariableDeclaration is met 
-	 * with the same layer/depth of nesting as a previous one, a new collection is created (as these should 
-	 * not share scope), and all future VariableDeclarations are added to that list, until another VariableDeclaration 
-	 * is met with the same depth of nesting.
+	 * Recursively goes through all variable declarations in the children of the input object, 
+	 * and collect them according to their nested and parallel structure using a depth-first search.
+	 * The while loop iterates through all variable declarations that are parallel, and for each one
+	 * collect it, and then recursively its children.
+	 *
+	 * What is meant by parallel and nested is that e.g. in the expression:
+	 * 		let x = 1 in let y = 2
+	 * The two variable declarations are not parallel / not at the same layer of nesting, as one
+	 * is nested in the other. While in the expression:
+	 * 		let x = 1 + let y = 2
+	 * They are not nested, but instead parallel.
 	 */
-	def private void collectVariableDeclaration(Iterable<VariableDeclaration> declarations, Set<Integer> seenContainerSizes) {
-		val head = declarations.head
-		val tail = declarations.tail
-		
-		if (!seenContainerSizes.add(head.allContainers.size)) {
-			val List<VariableDeclaration> inner = new CopyOnWriteArrayList()
-			inner.add(head)
-			variableDeclarations.add(inner)
-		}
-		else {
-			variableDeclarations.last.add(head)
-		}
-		if (!tail.empty) {
-			tail.collectVariableDeclaration(seenContainerSizes)
-		}
-	}
-	
-	/**
-	 * Helper method that allows searching for elements that are nested one layer.
-	 * Returns the index of both the outer and inner collections.
-	 */
-	def getIndex(List<List<VariableDeclaration>> container, VariableDeclaration target) {
-		for (i : 0 ..< container.size) {
-			val list = container.get(i)
-			val index = list.indexOf(target)
-			if (index != -1) {
-				return i -> index
+	def private void collectVariableDeclaration(EObject input, Node<VariableDeclaration> node) {
+	    val children = input.eAllContents
+	    while(children.hasNext) {
+			var candidate = children.next
+			if (candidate instanceof VariableDeclaration) {
+				children.prune // removes all elements nested in the last result of ::next (but keeps those parallel)
+				val addedNode = node.add(candidate)
+				collectVariableDeclaration(candidate, addedNode)
 			}
 		}
-		return -1 -> -1
 	}
 	
 	def generateClass(Root root, String pkg, String name)'''
@@ -136,55 +114,78 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 				«ENDFOR»
 			}
 			
-			«FOR declarations : variableDeclarations»
+			«FOR declarations : variableTree.getChildren»
 				«declarations.generateInnerClass»
-				
 			«ENDFOR»
 		}
 	'''
 	
 	/**
-	 * Recursively generates nested inner classes for 'let in's.
+	 * Recursively generates inner classes for 'let in's.
 	 */
-	def CharSequence generateInnerClass(Iterable<VariableDeclaration> declarations) {
-		val head = declarations.head
-		val tail = declarations.tail
+	def CharSequence generateInnerClass(Node<VariableDeclaration> node) {
+		if (node.data === null) {
+			return node.generateNestedInnerClass
+		}
 		'''
-			class «head.generateInnerClassName» {
+			class «node.data.generateInnerClassName» {
 				
-				private final int «head.name» = «head.generateAssignment»;
+				private final int «node.data.name» = «node.data.generateAssignment»;
 				
 				public int compute() {
-					return «head.in.generate»;
+					return «node.data.in.generate»;
 				}
 				
-				«IF !tail.isEmpty»
-					«tail.generateInnerClass»
-					
-				«ENDIF»
+				«node.generateNestedInnerClass»
 			}
 		'''
 	}
 	
 	/**
-	 * Makes sure that the generated code for an expression of the type:
-	 * 		let x = 5 in let x = x end end
+	 * Iterates through a Node's children and generates nested inner classes for them.
+	 */
+	def generateNestedInnerClass(Node<VariableDeclaration> node)'''
+		«FOR declaration: node.getChildren»
+			«declaration.generateInnerClass»
+			
+		«ENDFOR»
+	'''
+	
+	/**
+	 * Ensures that the generated code for an expression of the type:
+	 * 		let x = 5 in let x = x
 	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
 	 */
-	def generateAssignment(VariableDeclaration head) {
-		val expression = head.assignment
+	def generateAssignment(VariableDeclaration dec) { // TODO: refactor this method
+		/*val expression = head.assignment
 		val declarations = variableDeclarations.get(variableDeclarations.getIndex(head).key)
 		expression.getAllContentsOfType(VariableReference).filter[variable.name == head.name].forEach[
 			val ref = it
 			val target = declarations.takeWhile[it !== head].findLast[name == ref.variable.name]
 			variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
+		]*/
+		//expression.generate
+		
+		
+		val expression = dec.assignment
+		//bug: hvis expression i sig selv er en VariableReference så kommer den ikke med i forEach
+		expression.getAllContentsOfType(VariableReference).filter[variable.name == dec.name].forEach[
+			var candidateNode = variableTree.nodeOf(dec).parent
+			var VariableDeclaration target = null
+			while (target === null) {
+				if (candidateNode.data.name == variable.name) {
+					target = candidateNode.data
+					variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
+				}
+				candidateNode = candidateNode.parent
+			}
 		]
 		expression.generate
 	}
 	
 	def generateInnerClassName(VariableDeclaration declaration) {
-		val indices = variableDeclarations.getIndex(declaration)
-		'''Let«indices.key»_«indices.value»'''
+		val name = variableTree.indexOf(declaration).toString.replace("->", "_")
+		'''Let«name»'''
 	}
 	
 	def generateMethod(ExternalDeclaration dec)
