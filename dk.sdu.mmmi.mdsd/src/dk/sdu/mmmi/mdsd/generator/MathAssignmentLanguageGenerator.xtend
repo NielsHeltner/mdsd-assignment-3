@@ -6,7 +6,6 @@ package dk.sdu.mmmi.mdsd.generator
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Addition
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Division
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.EvaluateExpression
-import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalDeclaration
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.ExternalReference
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Literal
@@ -16,21 +15,13 @@ import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Root
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Subtraction
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.VariableDeclaration
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.VariableReference
-import java.util.HashSet
-import java.util.List
-import java.util.Set
-import java.util.concurrent.CopyOnWriteArrayList
+import org.eclipse.emf.ecore.EObject
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
 
-import static extension org.eclipse.xtext.EcoreUtil2.getAllContainers
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
-import java.util.HashMap
-import java.util.Map
-import java.util.ArrayList
-import org.eclipse.emf.ecore.EObject
 
 /**
  * Generates code from your model files on save.
@@ -49,8 +40,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * The outer list mimics the scope of each 'let in' that is not declared inside another,
 	 * and the inner list mimics the nested structure of the outer 'let in'.
 	 */
-	//val List<List<VariableDeclaration>> variableDeclarations = new CopyOnWriteArrayList()
-	val variableTree = new Tree<VariableDeclaration>()
+	var Node<VariableDeclaration> variableTree
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
 		val root = resource.allContents.filter(Root).head
@@ -58,12 +48,8 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		val dir = GEN_DIR
 		val pkg = dir.replaceAll("/", ".").substring(0, dir.length - 1) // convert path to package by converting all '/' to '.', and remove trailing '.'
 		val fileName = GEN_FILE_NAME
-		
-		//variableDeclarations.clear
-		//variableDeclarations.add(new CopyOnWriteArrayList())
-		
-		variableTree.clear
-		
+
+		variableTree = new Node
 		resource.allContents.filter(EvaluateExpression).forEach[collectVariableDeclarations]
 		
 		fsa.generateFile(dir + fileName + GEN_FILE_EXT, root.generateClass(pkg, fileName))
@@ -74,22 +60,19 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * as it contains the accumulated seenContainerSizes.
 	 */
 	def collectVariableDeclarations(EvaluateExpression expression) {
-		val root = new Node<VariableDeclaration>()
+		val root = new Node<VariableDeclaration>(variableTree)
 		collectVariableDeclaration(expression, root)
-		println(root.toString)
-		variableTree.add(root)
+		variableTree.childs.add(root)
 	}
 	
+	/**
+	 * Tail recursive method that goes through all VariableDeclarations. If a VariableDeclaration is met 
+	 * with the same layer/depth of nesting as a previous one, a new collection is created (as these should 
+	 * not share scope), and all future VariableDeclarations are added to that list, until another VariableDeclaration 
+	 * is met with the same depth of nesting.
+	 */
 	def void collectVariableDeclaration(EObject input, Node<VariableDeclaration> node) {
-		if(input === null) {
-			return;
-		}
-		//list = input.allContentsofType(VariableDeclaration)
 	    val contents = input.eAllContents//.filter(VariableDeclaration)
-	    if (contents.empty) {
-	    	println(input + ' had empty list')
-	        return;
-	    }
 	    while(contents.hasNext) {
 			var element = contents.next
 			if (element instanceof VariableDeclaration) {
@@ -111,45 +94,6 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			}
 		}
 	}
-	
-	/**
-	 * Tail recursive method that goes through all VariableDeclarations. If a VariableDeclaration is met 
-	 * with the same layer/depth of nesting as a previous one, a new collection is created (as these should 
-	 * not share scope), and all future VariableDeclarations are added to that list, until another VariableDeclaration 
-	 * is met with the same depth of nesting.
-	 */
-	 /*@Deprecated
-	def private void collectVariableDeclaration(Iterable<VariableDeclaration> declarations, Set<Integer> seenContainerSizes) {
-		val head = declarations.head
-		val tail = declarations.tail
-		
-		if (!seenContainerSizes.add(head.allContainers.size)) {
-			val List<VariableDeclaration> inner = new CopyOnWriteArrayList()
-			inner.add(head)
-			variableDeclarations.add(inner)
-		}
-		else {
-			variableDeclarations.last.add(head)
-		}
-		if (!tail.empty) {
-			tail.collectVariableDeclaration(seenContainerSizes)
-		}
-	}*/
-	
-	/**
-	 * Helper method that allows searching for elements that are nested one layer.
-	 * Returns the index of both the outer and inner collections.
-	 */
-	/*def getIndex(List<List<VariableDeclaration>> container, VariableDeclaration target) {
-		for (i : 0 ..< container.size) {
-			val list = container.get(i)
-			val index = list.indexOf(target)
-			if (index != -1) {
-				return i -> index
-			}
-		}
-		return -1 -> -1
-	}*/
 	
 	def generateClass(Root root, String pkg, String name)'''
 		«generateHeader»
@@ -177,24 +121,18 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 				«ENDFOR»
 			}
 			
-			«FOR declarations : variableTree.roots»
+			«FOR declarations : variableTree.childs»
 				«declarations.generateInnerClass»
-				
 			«ENDFOR»
 		}
 	'''
 	
 	/**
-	 * Recursively generates nested inner classes for 'let in's.
+	 * Recursively generates inner classes for 'let in's.
 	 */
 	def CharSequence generateInnerClass(Node<VariableDeclaration> node) {
 		if (node.data === null) {
-			return
-				'''
-					«FOR dec: node.childs»
-						«dec.generateInnerClass»
-					«ENDFOR»
-				'''
+			return node.generateNestedInnerClass
 		}
 		'''
 			class «node.data.generateInnerClassName» {
@@ -205,25 +143,27 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 					return «node.data.in.generate»;
 				}
 				
-				«FOR declaration : node.childs»
-					«declaration.generateInnerClass»
-					
-				«ENDFOR»
+				«node.generateNestedInnerClass»
 			}
 		'''
-		/*
-				«IF !tail.isEmpty»
-					«tail.generateInnerClass»
-					* «ENDIF»
-					*/
 	}
+	
+	/**
+	 * Iterates through a Node's children and generates nested inner classes for them.
+	 */
+	def generateNestedInnerClass(Node<VariableDeclaration> node)'''
+		«FOR declaration: node.childs»
+			«declaration.generateInnerClass»
+			
+		«ENDFOR»
+	'''
 	
 	/**
 	 * Makes sure that the generated code for an expression of the type:
 	 * 		let x = 5 in let x = x end end
 	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
 	 */
-	def generateAssignment(VariableDeclaration dec) {
+	def generateAssignment(VariableDeclaration dec) { // TODO: refactor this method
 		/*val expression = head.assignment
 		val declarations = variableDeclarations.get(variableDeclarations.getIndex(head).key)
 		expression.getAllContentsOfType(VariableReference).filter[variable.name == head.name].forEach[
@@ -233,31 +173,24 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		]*/
 		//expression.generate
 		
-		//vi har VariableDeclaration objektet
-		//fra dette, 
 		
 		val expression = dec.assignment
+		//bug: hvis expression i sig selv er en VariableReference så kommer den ikke med i forEach
 		expression.getAllContentsOfType(VariableReference).filter[variable.name == dec.name].forEach[
-			var candidateNode = variableTree.nodeOf(dec)
+			var candidateNode = variableTree.nodeOf(dec).parent
 			var VariableDeclaration target = null
 			while (target === null) {
 				if (candidateNode.data.name == variable.name) {
 					target = candidateNode.data
+					variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
 				}
-				else {
-					candidateNode = candidateNode.parent
-				}
+				candidateNode = candidateNode.parent
 			}
-			variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
 		]
-		
-		
 		expression.generate
 	}
 	
 	def generateInnerClassName(VariableDeclaration declaration) {
-		/*val indices = variableDeclarations.getIndex(declaration)
-		'''Let«indices.key»_«indices.value»'''*/
 		val name = variableTree.indexOf(declaration).toString.replace("->", "_")
 		'''Let«name»'''
 	}
@@ -309,84 +242,5 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	
 	def dispatch generate(Literal expression)
 		'''«expression.value»'''
-	
-	
-	static class Tree<T> {
-		List<Node<T>> roots = new ArrayList()
-		
-		def clear() {
-			roots.clear
-		}
-		
-		def add(Node<T> node) {
-			roots.add(node)
-		}
-		
-		def indexOf(T dec) {
-			for(root : roots) {
-				val a = root.indexOf(dec)
-				if(a!=-1) {
-					return a
-				}
-			}
-		}
-		
-		def nodeOf(T dec) {
-			roots.findFirst[nodeOf(dec) !== null]
-		}
-		
-	}
-	
-	static class Node<T> {
-		Node<T> parent //if null = tree
-	    T data //if null = root
-	    List<Node<T>> childs = new ArrayList() //if empty == leaf
-    
-    	new() {}
-    
-    	new(T dec, Node<T> parent) {
-    		data = dec
-    		this.parent = parent
-    	}
-
-        def add(T dec) {
-            val addedNode = new Node(dec, this)
-            childs.add(addedNode)
-            return addedNode
-        }
-        
-        def indexOf(T dec) {
-        	for (var i = 0; i < childs.size; i++) {
-        		if (childs.get(i).data == dec) {
-        			return i
-        		}
-        		else {
-        			val a = childs.get(i).indexOf(dec)
-        			if (a != -1) {
-        				return i -> a
-        			}
-        		}
-        	}
-        	return -1
-        }
-        
-        def Node<T> nodeOf(T dec) {
-        	/*if (data == dec) {
-        		return this
-        	}*/
-        	for (child : childs) {
-        		if (child.data == dec) {
-        			return child
-        		}
-        		else {
-        			val a = child.nodeOf(dec)
-        			if (a !== null) {
-        				return a
-        			}
-        		}
-        	}
-        }
-
-	}
 	
 }
