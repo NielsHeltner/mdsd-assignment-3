@@ -24,6 +24,7 @@ import org.eclipse.xtext.generator.IGeneratorContext
 
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContainers
 import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
+import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
 
 /**
  * Generates code from your model files on save.
@@ -104,35 +105,30 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 		}
 	'''
 	
+	def generateAssignment(VariableDeclaration declaration) {
+		declaration.resolveReference(declaration.parent, declaration)
+		declaration.assignment.generate
+	}
+	
 	/**
-	 * Ensures that the generated code for an expression of the type:
+	 * Ensures that the variable references in the generated code for an expression of the type:
 	 * 		let x = 5 in let x = x
-	 * can be resolved properly, by telling Java it should look in the outer class for the last 'x'.
+	 * can be resolved properly, by telling Java it should look in the outer classes for the last 'x', 
+	 * as it isn't a self-reference.
 	 */
-	def generateAssignment(VariableDeclaration dec) { // TODO: refactor this method
-		/*val expression = head.assignment
-		val declarations = variableDeclarations.get(variableDeclarations.getIndex(head).key)
-		expression.getAllContentsOfType(VariableReference).filter[variable.name == head.name].forEach[
-			val ref = it
-			val target = declarations.takeWhile[it !== head].findLast[name == ref.variable.name]
-			variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
-		]*/
-		//expression.generate
-		
-		
-		//bug: hvis expression i sig selv er en VariableReference så kommer den ikke med i forEach
-		dec.assignment.getAllContentsOfType(VariableReference).filter[variable.name == dec.name].forEach[
-			var candidate = dec
-			var VariableDeclaration target
-			while (target === null) {
-				if (candidate != dec && candidate.name == variable.name) {
-					target = candidate
-					variable.name = '''«target.generateInnerClassName».this.«variable.name»'''
-				}
-				candidate = candidate.parent
+	def void resolveReference(Expression ref, VariableDeclaration candidate, VariableDeclaration original) {
+		if (ref === null || candidate === null) {
+			return
+		}
+		if (ref instanceof VariableReference) {
+			if (candidate.name == ref.variable.name && candidate != original) {
+				ref.variable.name = '''«candidate.generateInnerClassName».this.«ref.variable.name»'''
 			}
-		]
-		dec.assignment.generate
+			else {
+				resolveReference(ref, candidate.parent, original) // current candidate didn't satisfy conditions, try to resolve with parent
+			}
+		}
+		resolveReference(ref.getAllContentsOfType(VariableReference).head, candidate, original) // resolve the next child in the expression
 	}
 	
 	def generateInnerClassName(VariableDeclaration declaration) {
@@ -219,7 +215,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
      * Returns the first VariableDeclaration found, and any VariableDeclarations that are
      * parallel / at the same depth of nesting as the first one found.
      */
-    def <T extends EObject> getDirectVariableDeclarations(EObject input) {
+    def <T extends EObject> getDirectVariableDeclarations(T input) {
     	val children = input.eAllContents
     	val results = new ArrayList()
     	while (children.hasNext) {
