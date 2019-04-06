@@ -106,7 +106,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	'''
 	
 	def generateAssignment(VariableDeclaration declaration) {
-		declaration.resolveReference(declaration.parent, declaration)
+		declaration.assignment.resolveReference(declaration.parent, declaration)
 		declaration.assignment.generate
 	}
 	
