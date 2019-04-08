@@ -27,9 +27,7 @@ import static extension org.eclipse.xtext.EcoreUtil2.getAllContentsOfType
 import dk.sdu.mmmi.mdsd.mathAssignmentLanguage.Expression
 
 /**
- * Generates code from your model files on save.
- * 
- * See https://www.eclipse.org/Xtext/documentation/303_runtime_concepts.html#code-generation
+ * Generates code from the model files on save.
  */
 class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	
