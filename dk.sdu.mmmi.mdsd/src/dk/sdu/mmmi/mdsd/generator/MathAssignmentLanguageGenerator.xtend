@@ -81,7 +81,7 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 	 * Iterates through an EObject's variable declaration children and generates nested inner classes for them.
 	 */
 	def <T extends EObject> generateNestedInnerClass(T parent)'''
-		«FOR declaration: parent.directVariableDeclarations»
+		«FOR declaration: parent.getDirectChildren(VariableDeclaration)»
 			«declaration.generateInnerClass»
 			
 		«ENDFOR»
@@ -119,14 +119,14 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
 			return
 		}
 		if (ref instanceof VariableReference) {
-			if (candidate.name == ref.variable.name && candidate != original) {
+			if (ref.variable.name == original.name && candidate.name == ref.variable.name && candidate != original) {
 				ref.variable.name = '''«candidate.generateInnerClassName».this.«ref.variable.name»'''
 			}
 			else {
 				resolveReference(ref, candidate.parent, original) // current candidate didn't satisfy conditions, try to resolve with parent
 			}
 		}
-		resolveReference(ref.getAllContentsOfType(VariableReference).head, candidate, original) // resolve the next child in the expression
+		ref.getDirectChildren(VariableReference).forEach[resolveReference(candidate, original)] // resolve direct children in the expression
 	}
 	
 	def generateInnerClassName(VariableDeclaration declaration) {
@@ -210,17 +210,17 @@ class MathAssignmentLanguageGenerator extends AbstractGenerator {
     }
     
     /**
-     * Returns the first VariableDeclaration found, and any VariableDeclarations that are
+     * Returns the first object of type found, and any objects of type that are
      * parallel / at the same depth of nesting as the first one found.
      */
-    def <T extends EObject> getDirectVariableDeclarations(T input) {
+    def <T extends EObject> getDirectChildren(EObject input, Class<T> type) {
     	val children = input.eAllContents
-    	val results = new ArrayList()
+    	val results = new ArrayList<T>()
     	while (children.hasNext) {
     		val candidate = children.next
-    		if (candidate instanceof VariableDeclaration) {
+    		if (type.isInstance(candidate)) {
     			children.prune // removes all elements nested in the last result of ::next (but keeps those parallel)
-    			results.add(candidate)
+    			results.add(type.cast(candidate))
     		}
     	}
     	return results
